@@ -1,0 +1,357 @@
+# Apache Kudu Troubleshooting
+
+## [Startup Errors](http://kudu.apache.org/docs/troubleshooting.html#_startup_errors)
+
+### [Errors During Hole Punching Test](http://kudu.apache.org/docs/troubleshooting.html#req_hole_punching)
+
+Kudu requires hole punching capabilities in order to be efficient. Hole punching support depends upon your operation system kernel version and local filesystem implementation.
+
+- RHEL or CentOS 6.4 or later, patched to kernel version of 2.6.32-358 or later. Unpatched RHEL or CentOS 6.4 does not include a kernel with support for hole punching.
+
+- Ubuntu 14.04 includes version 3.13 of the Linux kernel, which supports hole punching.
+
+- Newer versions of the EXT4 or XFS file systems support hole punching, but EXT3 does not. Older versions of XFS that do not support hole punching return a `EOPNOTSUPP` (operation not supported) error. Older versions of either EXT4 or XFS that do not support hole punching cause Kudu to emit an error message such as the following and to fail to start:
+
+  ```
+  Error during hole punch test. The log block manager requires a
+  filesystem with hole punching support such as ext4 or xfs. On el6,
+  kernel version 2.6.32-358 or newer is required. To run without hole
+  punching (at the cost of some efficiency and scalability), reconfigure
+  Kudu with --block_manager=file. Refer to the Kudu documentation for more
+  details. Raw error message follows.
+  ```
+
+Without hole punching support, the log block manager is unsafe to use. It won’t ever delete blocks, and will consume ever more space on disk.
+
+If you can’t use hole punching in your environment, you can still try Kudu. Enable the file block manager instead of the log block manager by adding the `--block_manager=file` flag to the commands you use to start the master and tablet servers. The file block manager does not scale as well as the log block manager.
+
+|      | The file block manager is known to scale and perform poorly, and should only be used for small-scale evaluation and development. |
+| ---- | ------------------------------------------------------------ |
+|      |                                                              |
+
+### [NTP Clock Synchronization](http://kudu.apache.org/docs/troubleshooting.html#ntp)
+
+For the master and tablet server daemons, the server’s clock must be synchronized using NTP. In addition, the **maximum clock error**(not to be mistaken with the estimated error) be below a configurable threshold. The default value is 10 seconds, but it can be set with the flag `--max_clock_sync_error_usec`.
+
+If NTP is not installed, or if the clock is reported as unsynchronized, Kudu will not start, and will emit a message such as:
+
+```
+F0924 20:24:36.336809 14550 hybrid_clock.cc:191 Couldn't get the current time: Clock unsynchronized. Status: Service unavailable: Error reading clock. Clock considered unsynchronized.
+```
+
+If NTP is installed and synchronized, but the maximum clock error is too high, the user will see a message such as:
+
+```
+Sep 17, 8:13:09.873 PM FATAL hybrid_clock.cc:196 Couldn't get the current time: Clock synchronized, but error: 11130000, is past the maximum allowable error: 10000000
+```
+
+or
+
+```
+Sep 17, 8:32:31.135 PM FATAL tablet_server_main.cc:38 Check failed: _s.ok() Bad status: Service unavailable: Cannot initialize clock: Cannot initialize HybridClock. Clock synchronized but error was too high (11711000 us).
+```
+
+#### [Installing NTP](http://kudu.apache.org/docs/troubleshooting.html#_installing_ntp)
+
+To install NTP, use the appropriate command for your operating system:
+
+| OS            | Command                    |
+| ------------- | -------------------------- |
+| Debian/Ubuntu | `sudo apt-get install ntp` |
+| RHEL/CentOS   | `sudo yum install ntp`     |
+
+If NTP is installed but not running, start it using one of these commands:
+
+| OS            | Command                         |
+| ------------- | ------------------------------- |
+| Debian/Ubuntu | `sudo service ntp restart`      |
+| RHEL/CentOS   | `sudo /etc/init.d/ntpd restart` |
+
+#### [Monitoring NTP Status](http://kudu.apache.org/docs/troubleshooting.html#_monitoring_ntp_status)
+
+When NTP is installed, you can monitor the synchronization status by running `ntptime`. For example, a healthy system may report:
+
+```
+ntp_gettime() returns code 0 (OK)
+  time de24c0cf.8d5da274  Tue, Feb  6 2018 16:03:27.552, (.552210980),
+  maximum error 224455 us, estimated error 383 us, TAI offset 0
+ntp_adjtime() returns code 0 (OK)
+  modes 0x0 (),
+  offset 1279.543 us, frequency 2.500 ppm, interval 1 s,
+  maximum error 224455 us, estimated error 383 us,
+  status 0x2001 (PLL,NANO),
+  time constant 10, precision 0.001 us, tolerance 500 ppm,
+```
+
+In particular, note the following most important pieces of output:
+
+- `maximum error 22455 us`: this value is well under the 10-second maximum error required by Kudu.
+- `status 0x2001 (PLL,NANO)`: this indicates a healthy synchronization status.
+
+In contrast, a system without NTP properly configured and running will output something like the following:
+
+```
+ntp_gettime() returns code 5 (ERROR)
+  time de24c240.0c006000  Tue, Feb  6 2018 16:09:36.046, (.046881),
+  maximum error 16000000 us, estimated error 16000000 us, TAI offset 0
+ntp_adjtime() returns code 5 (ERROR)
+  modes 0x0 (),
+  offset 0.000 us, frequency 2.500 ppm, interval 1 s,
+  maximum error 16000000 us, estimated error 16000000 us,
+  status 0x40 (UNSYNC),
+  time constant 10, precision 1.000 us, tolerance 500 ppm,
+```
+
+Note the `UNSYNC` status and the 16-second maximum error.
+
+If more detailed information is needed, the `ntpq` or `ntpdc` tools can be used to dump further information about which network time servers are currently acting as sources:
+
+```
+$ ntpq -n -c opeers
+     remote           local      st t when poll reach   delay   offset    disp
+==============================================================================
+ 0.0.0.0         0.0.0.0         16 p    -   64    0    0.000    0.000 16000.0
+ 0.0.0.0         0.0.0.0         16 p    -   64    0    0.000    0.000 16000.0
+ 0.0.0.0         0.0.0.0         16 p    -   64    0    0.000    0.000 16000.0
+ 0.0.0.0         0.0.0.0         16 p    -   64    0    0.000    0.000 16000.0
+ 0.0.0.0         0.0.0.0         16 p    -   64    0    0.000    0.000 16000.0
+-108.59.2.24     10.16.2.89       2 u    3   64    3   74.380    0.321  62.992
+-208.82.104.205  10.16.2.89       2 u    5   64    3   52.654   -4.054  62.965
+#192.96.202.120  10.16.2.89       2 u    1   64    3   74.737    6.538  62.988
+#69.10.161.7     10.16.2.89       3 u    5   64    3   28.353   -1.967  62.960
+-173.255.206.154 10.16.2.89       3 u    -   64    3   42.906   -3.127  62.996
+-69.195.159.158  10.16.2.89       2 u    1   64    3   52.543   -4.788  62.987
+*216.218.254.202 10.16.2.89       1 u    5   64    3    2.567    0.053  62.974
+-129.250.35.250  10.16.2.89       2 u    3   64    3    2.603    0.256  62.985
++45.76.244.193   10.16.2.89       2 u    5   64    3   19.522    0.188  62.969
+-69.89.207.199   10.16.2.89       2 u    5   64    3   66.687   -0.395  62.967
+-171.66.97.126   10.16.2.89       1 u    1   64    3   12.627   -3.572  62.963
+#66.228.42.59    10.16.2.89       4 u    1   64    3   72.143    4.034  62.971
+ 91.189.89.198   10.16.2.89       2 u    5   64    3  135.329    3.069 3937.74
+#162.210.111.4   10.16.2.89       2 u    -   64    3   29.572    6.849  62.966
++199.102.46.80   10.16.2.89       1 u    3   64    3   57.022    0.111  63.386
+ 91.189.89.199   10.16.2.89       2 u    4   64    3  138.269    3.228 3937.98
+```
+
+|      | Depending on the specific version of NTP, the correct command may be either `ntpq -n -c opeers` or `ntpq -n -c lpeers`. |
+| ---- | ------------------------------------------------------------ |
+|      |                                                              |
+
+Using `chrony` for time synchronization
+
+Some operating systems offer `chrony` as an alternative to `ntpd` for network time synchronization. Kudu has been tested most thoroughly using `ntpd` and use of `chrony` is considered experimental.
+
+In order to use `chrony` for synchronization, `chrony.conf` must be configured with the `rtcsync` option.
+
+#### [NTP Configuration Best Practices](http://kudu.apache.org/docs/troubleshooting.html#_ntp_configuration_best_practices)
+
+In order to provide stable time synchronization with low maximum error, follow these best NTP configuration best practices.
+
+**Always configure at least four time sources for NTP.** In addition to providing redundancy in case one or more time sources becomes unavailable, The NTP protocol is designed to increase its accuracy with a diversity of sources. Even if your organization provides one or more local time servers, configuring additional remote servers is highly recommended for a robust setup.
+
+**Pick servers in your server’s local geography.** For example, if your servers are located in Europe, pick servers from the European NTP pool. If your servers are running in a public cloud environment, consult the cloud provider’s documentation for a recommended NTP setup. Many cloud providers offer highly accurate clock synchronization as a service.
+
+**Use the iburst option for faster synchronization at startup**. The `iburst` option instructs `ntpd` to send an initial "burst" of time queries at startup. This typically results in a faster time synchronization when a machine restarts.
+
+An example NTP server list may appear as follows:
+
+```
+# Use my organization's internal NTP servers.
+server ntp1.myorg.internal iburst
+server ntp2.myorg.internal iburst
+# Provide several public pool servers from the US pool for
+# redundancy and robustness.
+server 0.pool.us.ntp.org iburst
+server 1.pool.us.ntp.org iburst
+server 2.pool.us.ntp.org iburst
+server 3.pool.us.ntp.org iburst
+```
+
+|      | After configuring NTP, use the `ntpq` tool described above to verify that `ntpd` was able to connect to a variety of peers. If no public peers appear, it is possiblbe that the NTP protocol is being blocked by a firewall or other network connectivity issue. |
+| ---- | ------------------------------------------------------------ |
+|      |                                                              |
+
+#### [Troubleshooting NTP Stability Problems](http://kudu.apache.org/docs/troubleshooting.html#_troubleshooting_ntp_stability_problems)
+
+As of Kudu 1.6.0, Kudu daemons are able to continue to operate during a brief loss of NTP synchronization. If NTP synchronization is lost for several hours, however, daemons may crash. If a daemon crashes due to NTP synchronization issues, consult the `ERROR` log for a dump of related information which may help to diagnose the issue.
+
+|      | Kudu 1.5.0 and earlier versions were less resilient to brief NTP outages. In addition, they contained a [bug](https://issues.apache.org/jira/browse/KUDU-2209) which could cause Kudu to incorrectly measure the maximum error, resulting in crashes. If you experience crashes related to clock synchronization on these earlier versions of Kudu and it appears that the system’s NTP configuration is correct, consider upgrading to Kudu 1.6.0 or later. |
+| ---- | ------------------------------------------------------------ |
+|      |                                                              |
+
+|      | NTP requires a network connection and may take a few minutes to synchronize the clock at startup. In some cases a spotty network connection may make NTP report the clock as unsynchronized. A common, though temporary, workaround for this is to restart NTP with one of the commands above. |
+| ---- | ------------------------------------------------------------ |
+|      |                                                              |
+
+## [Reporting Kudu Crashes](http://kudu.apache.org/docs/troubleshooting.html#crash_reporting)
+
+Kudu uses the [Google Breakpad](https://chromium.googlesource.com/breakpad/breakpad/) library to generate a minidump whenever Kudu experiences a crash. These minidumps are typically only a few MB in size and are generated even if core dump generation is disabled. At this time, generating minidumps is only possible in Kudu on Linux builds.
+
+A minidump file contains important debugging information about the process that crashed, including shared libraries loaded and their versions, a list of threads running at the time of the crash, the state of the processor registers and a copy of the stack memory for each thread, and CPU and operating system version information.
+
+It is also possible to force Kudu to create a minidump without killing the process by sending a `USR1` signal to the `kudu-tserver` or `kudu-master` process. For example:
+
+```bash
+sudo pkill -USR1 kudu-tserver
+```
+
+By default, Kudu stores its minidumps in a subdirectory of its configured glog directory called `minidumps`. This location can be customized by setting the `--minidump_path` flag. Kudu will retain only a certain number of minidumps before deleting the oldest ones, in an effort to avoid filling up the disk with minidump files. The maximum number of minidumps that will be retained can be controlled by setting the `--max_minidumps` gflag.
+
+Minidumps contain information specific to the binary that created them and so are not usable without access to the exact binary that crashed, or a very similar binary. For more information on processing and using minidump files, see scripts/dump_breakpad_symbols.py.
+
+|      | A minidump can be emailed to a Kudu developer or attached to a JIRA in order to help a Kudu developer debug a crash. In order for it to be useful, the developer will need to know the exact version of Kudu and the operating system where the crash was observed. Note that while a minidump does not contain a heap memory dump, it does contain stack memory and therefore it is possible for application data to appear in a minidump. If confidential or personal information is stored on the cluster, do not share minidump files. |
+| ---- | ------------------------------------------------------------ |
+|      |                                                              |
+
+## [Performance Troubleshooting](http://kudu.apache.org/docs/troubleshooting.html#_performance_troubleshooting)
+
+### [Kudu Tracing](http://kudu.apache.org/docs/troubleshooting.html#kudu_tracing)
+
+The `kudu-master` and `kudu-tserver` daemons include built-in tracing support based on the open source [Chromium Tracing](https://www.chromium.org/developers/how-tos/trace-event-profiling-tool) framework. You can use tracing to help diagnose latency issues or other problems on Kudu servers.
+
+#### [Accessing the tracing interface](http://kudu.apache.org/docs/troubleshooting.html#_accessing_the_tracing_interface)
+
+The tracing interface is accessed via a web browser as part of the embedded web server in each of the Kudu daemons.
+
+| Daemon        | URL                                                    |
+| ------------- | ------------------------------------------------------ |
+| Tablet Server | <http://tablet-server-1.example.com:8050/tracing.html> |
+| Master        | <http://master-1.example.com:8051/tracing.html>        |
+
+|      | The tracing interface is known to work in recent versions of Google Chrome. Other browsers may not work as expected. |
+| ---- | ------------------------------------------------------------ |
+|      |                                                              |
+
+#### [Collecting a trace](http://kudu.apache.org/docs/troubleshooting.html#_collecting_a_trace)
+
+After navigating to the tracing interface, click the **Record** button on the top left corner of the screen. When beginning to diagnose a problem, start by selecting all categories. Click **Record** to begin recording a trace.
+
+During the trace collection, events are collected into an in-memory ring buffer. This ring buffer is fixed in size, so it will eventually fill up to 100%. However, new events are still being collected while older events are being removed. While recording the trace, trigger the behavior or workload you are interested in exploring.
+
+After collecting for several seconds, click **Stop**. The collected trace will be downloaded and displayed. Use the **?** key to display help text about using the tracing interface to explore the trace.
+
+#### [Saving a trace](http://kudu.apache.org/docs/troubleshooting.html#_saving_a_trace)
+
+You can save collected traces as JSON files for later analysis by clicking **Save** after collecting the trace. To load and analyze a saved JSON file, click **Load** and choose the file.
+
+### [RPC Timeout Traces](http://kudu.apache.org/docs/troubleshooting.html#_rpc_timeout_traces)
+
+If client applications are experiencing RPC timeouts, the Kudu tablet server `WARNING` level logs should contain a log entry which includes an RPC-level trace. For example:
+
+```
+W0922 00:56:52.313848 10858 inbound_call.cc:193] Call kudu.consensus.ConsensusService.UpdateConsensus
+from 192.168.1.102:43499 (request call id 3555909) took 1464ms (client timeout 1000).
+W0922 00:56:52.314888 10858 inbound_call.cc:197] Trace:
+0922 00:56:50.849505 (+     0us) service_pool.cc:97] Inserting onto call queue
+0922 00:56:50.849527 (+    22us) service_pool.cc:158] Handling call
+0922 00:56:50.849574 (+    47us) raft_consensus.cc:1008] Updating replica for 2 ops
+0922 00:56:50.849628 (+    54us) raft_consensus.cc:1050] Early marking committed up to term: 8 index: 880241
+0922 00:56:50.849968 (+   340us) raft_consensus.cc:1056] Triggering prepare for 2 ops
+0922 00:56:50.850119 (+   151us) log.cc:420] Serialized 1555 byte log entry
+0922 00:56:50.850213 (+    94us) raft_consensus.cc:1131] Marking committed up to term: 8 index: 880241
+0922 00:56:50.850218 (+     5us) raft_consensus.cc:1148] Updating last received op as term: 8 index: 880243
+0922 00:56:50.850219 (+     1us) raft_consensus.cc:1195] Filling consensus response to leader.
+0922 00:56:50.850221 (+     2us) raft_consensus.cc:1169] Waiting on the replicates to finish logging
+0922 00:56:52.313763 (+1463542us) raft_consensus.cc:1182] finished
+0922 00:56:52.313764 (+     1us) raft_consensus.cc:1190] UpdateReplicas() finished
+0922 00:56:52.313788 (+    24us) inbound_call.cc:114] Queueing success response
+```
+
+These traces can give an indication of which part of the request was slow. Please include them in bug reports related to RPC latency outliers.
+
+### [Kernel Stack Watchdog Traces](http://kudu.apache.org/docs/troubleshooting.html#_kernel_stack_watchdog_traces)
+
+Each Kudu server process has a background thread called the Stack Watchdog, which monitors the other threads in the server in case they have blocked for longer-than-expected periods of time. These traces can indicate operating system issues or bottlenecked storage.
+
+When the watchdog thread identifies a case of thread blockage, it logs an entry in the `WARNING` log like the following:
+
+```
+W0921 23:51:54.306350 10912 kernel_stack_watchdog.cc:111] Thread 10937 stuck at /data/kudu/consensus/log.cc:505 for 537ms:
+Kernel stack:
+[<ffffffffa00b209d>] do_get_write_access+0x29d/0x520 [jbd2]
+[<ffffffffa00b2471>] jbd2_journal_get_write_access+0x31/0x50 [jbd2]
+[<ffffffffa00fe6d8>] __ext4_journal_get_write_access+0x38/0x80 [ext4]
+[<ffffffffa00d9b23>] ext4_reserve_inode_write+0x73/0xa0 [ext4]
+[<ffffffffa00d9b9c>] ext4_mark_inode_dirty+0x4c/0x1d0 [ext4]
+[<ffffffffa00d9e90>] ext4_dirty_inode+0x40/0x60 [ext4]
+[<ffffffff811ac48b>] __mark_inode_dirty+0x3b/0x160
+[<ffffffff8119c742>] file_update_time+0xf2/0x170
+[<ffffffff8111c1e0>] __generic_file_aio_write+0x230/0x490
+[<ffffffff8111c4c8>] generic_file_aio_write+0x88/0x100
+[<ffffffffa00d3fb1>] ext4_file_write+0x61/0x1e0 [ext4]
+[<ffffffff81180f5b>] do_sync_readv_writev+0xfb/0x140
+[<ffffffff81181ee6>] do_readv_writev+0xd6/0x1f0
+[<ffffffff81182046>] vfs_writev+0x46/0x60
+[<ffffffff81182102>] sys_pwritev+0xa2/0xc0
+[<ffffffff8100b072>] system_call_fastpath+0x16/0x1b
+[<ffffffffffffffff>] 0xffffffffffffffff
+
+User stack:
+    @       0x3a1ace10c4  (unknown)
+    @          0x1262103  (unknown)
+    @          0x12622d4  (unknown)
+    @          0x12603df  (unknown)
+    @           0x8e7bfb  (unknown)
+    @           0x8f478b  (unknown)
+    @           0x8f55db  (unknown)
+    @          0x12a7b6f  (unknown)
+    @       0x3a1b007851  (unknown)
+    @       0x3a1ace894d  (unknown)
+    @              (nil)  (unknown)
+```
+
+These traces can be useful for diagnosing root-cause latency issues when they are caused by systems below Kudu, such as disk controllers or file systems.
+
+### [Memory Limits](http://kudu.apache.org/docs/troubleshooting.html#memory_limits)
+
+Kudu has a hard and soft memory limit. The hard memory limit is the maximum amount a Kudu process is allowed to use, and is controlled by the `--memory_limit_hard_bytes` flag. The soft memory limit is a percentage of the hard memory limit, controlled by the flag `memory_limit_soft_percentage` and with a default value of 80%, that determines the amount of memory a process may use before it will start rejecting some write operations.
+
+If the logs or RPC traces contain messages like
+
+```
+Service unavailable: Soft memory limit exceeded (at 96.35% of capacity)
+```
+
+then Kudu is rejecting writes due to memory backpressure. This may result in write timeouts. There are several ways to relieve the memory pressure on Kudu:
+
+- If the host has more memory available for Kudu, increase `--memory_limit_hard_bytes`.
+- Increase the rate at which Kudu can flush writes from memory to disk by increasing the number of disks or increasing the number of maintenance manager threads `--maintenance_manager_num_threads`. Generally, the recommended ratio of maintenance manager threads to data directories is 1:3.
+- Reduce the volume of writes flowing to Kudu on the application side.
+
+### [Heap Sampling](http://kudu.apache.org/docs/troubleshooting.html#heap_sampling)
+
+For advanced debugging of memory usage, administrators may enable heap sampling on Kudu daemons. This allows Kudu developers to associate memory usage with the specific lines of code and data structures responsible. When reporting a bug related to memory usage or an apparent memory leak, heap profiling can give quantitative data to pinpoint the issue.
+
+|      | Heap sampling is an advanced troubleshooting technique and may cause performance degradation or instability of the Kudu service. Currently it is not recommended to enable this in a production environment unless specifically requested by the Kudu development team. |
+| ---- | ------------------------------------------------------------ |
+|      |                                                              |
+
+To enable heap sampling on a Kudu daemon, pass the flag `--heap-sample-every-n-bytes=524588`. If heap sampling is enabled, the current sampled heap occupancy can be retrieved over HTTP by visiting `http://tablet-server.example.com:8050/pprof/heap` or`http://master.example.com:8051/pprof/heap`. The output is a machine-readable dump of the stack traces with their associated heap usage.
+
+Rather than visiting the heap profile page directly in a web browser, it is typically more useful to use the `pprof` tool that is distributed as part of the `gperftools` open source project. For example, a developer with a local build tree can use the following command to collect the sampled heap usage and output an SVG diagram:
+
+```
+thirdparty/installed/uninstrumented/bin/pprof -svg  'http://localhost:8051/pprof/heap' > /tmp/heap.svg
+```
+
+The resulting SVG may be visualized in a web browser or sent to the Kudu community to help troubleshoot memory occupancy issues.
+
+|      | Heap samples contain only summary information about allocations and do not contain any *data* from the heap. It is safe to share heap samples in public without fear of exposing confidential or sensitive data. |
+| ---- | ------------------------------------------------------------ |
+|      |                                                              |
+
+### [Disk Issues](http://kudu.apache.org/docs/troubleshooting.html#disk_issues)
+
+When Kudu starts, it checks each configured data directory, expecting either for all to be initialized or for all to be empty. If a server fails to start with a log message like
+
+```
+Check failed: _s.ok() Bad status: Already present: FS layout already exists; not overwriting existing layout: FSManager roots already exist: /data0/kudu/data
+```
+
+then this precondition has failed. This could be because Kudu was configured with non-empty data directories on first startup, or because a previously-running, healthy Kudu process was restarted and at least one data directory was deleted or is somehow corrupted, perhaps because of a disk error. If in the latter situation, consult the [Changing Directory Configurations](http://kudu.apache.org/docs/administration.html#change_dir_config) documentation.
+
+## [Issues using Kudu](http://kudu.apache.org/docs/troubleshooting.html#_issues_using_kudu)
+
+### [ClassNotFoundException: com.cloudera.kudu.hive.KuduStorageHandler](http://kudu.apache.org/docs/troubleshooting.html#hive_handler)
+
+Users will encounter this exception when trying to use a Kudu table via Hive. This is not a case of a missing jar, but simply that Impala stores Kudu metadata in Hive in a format that’s unreadable to other tools, including Hive itself and Spark. There is no workaround for Hive users. Spark users need to create temporary tables.

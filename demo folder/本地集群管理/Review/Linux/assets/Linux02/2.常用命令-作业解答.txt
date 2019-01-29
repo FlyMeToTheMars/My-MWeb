@@ -1,0 +1,92 @@
+使用普通用户xiaoniu登录，然后切换到root用户
+
+1.进入到用户根目录
+cd ~ 或 cd
+
+2.查看当前所在目录
+pwd
+
+3.进入到xiaoniu用户根目录
+cd ~xiaoniu
+cd /home/xiaoniu
+
+4.返回到原来目录
+cd -
+
+5.返回到上一级目录
+cd ..
+
+6.查看xiaoniu用户根目录下的所有文件
+ls -la
+
+7.在根目录下创建一个xiaoniu的文件夹
+mkdir /xiaoniu
+
+8.在/xiaoniu目录下创建src和WebRoot两个文件夹
+分别创建：mkdir /xiaoniu/src
+		  mkdir /xiaoniu/WebRoot
+同时创建：mkdir /xiaoniu/{src,WebRoot}
+
+进入到/xiaoniu目录，在该目录下创建.classpath和README文件
+分别创建：touch .classpath
+		  touch README
+同时创建：touch {.classpath,README}
+
+查看/xiaoniu目录下面的所有文件
+ls -la
+
+在/xiaoniu目录下面创建一个test.txt文件,同时写入内容"this is test"
+echo "this is test" > test.txt
+cat>test.txt<<flag
+
+查看一下test.txt的内容
+cat test.txt
+more test.txt
+less test.txt
+
+向README文件追加写入"please read me first"
+echo "please read me first" >> README
+
+将test.txt的内容追加到README文件中
+cat test.txt >> README
+
+拷贝/xiaoniu目录下的所有文件到/xiaoniu-bak
+cp -r /xiaoniu /xiaoniu-bak
+
+进入到/xiaoniu-bak目录，将test.txt移动到src目录下，并修改文件名为Student.java
+mv test.txt src/Student.java
+
+在src目录下创建一个struts.xml
+> struts.xml
+
+删除所有的xml类型的文件
+rm -rf *.xml
+
+删除/xiaoniu-bak目录和下面的所有文件
+rm -rf /xiaoniu-bak
+
+返回到/xiaoniu目录，查看一下README文件有多单词，多少个少行
+wc -w README
+wc -l README
+
+返回到根目录，将/xiaoniu目录先打包，再用gzip压缩
+分步完成：tar -cvf xiaoniu.tar xiaoniu
+		  gzip xiaoniu.tar
+一步完成：tar -zcvf xiaoniu.tar.gz xiaoniu
+		  
+将其解压缩，再取消打包
+分步完成：gzip -d xiaoniu.tar.gz 或 gunzip xiaoniu.tar.gz
+一步完成：tar -zxvf xiaoniu.tar.gz
+
+将/xiaoniu目录先打包，同时用bzip2压缩，并保存到/tmp目录下
+tar -jcvf /tmp/xiaoniu.tar.bz2 xiaoniu
+
+将/tmp/xiaoniu.tar.bz2解压到/usr目录下面
+tar -jxvf xiaoniu.tar.bz2 -C /usr/
+
+向tar包里面添加文件
+tar -cvf test.tar edu
+tar -rvf test.tar edu.xml
+
+tar -xvf test.tar -C /usr/
+

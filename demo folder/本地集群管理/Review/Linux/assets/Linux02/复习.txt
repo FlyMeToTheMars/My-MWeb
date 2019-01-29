@@ -1,0 +1,61 @@
+
+
+linux的目录结构  /    /bin/   . .. 
+
+linux基本命令
+
+文件处理命令   crud
+c : mkdir  touch
+r:  cat more head tail      tac  less
+u: cp mv  
+d:  rm
+cd pwd ls   ll = ls -l
+
+ln -s 
+
+
+帮助命令
+man   外部命令  命令 配置文件   man 5 passwd 
+help  内部命令
+命令 --help   所有的选项
+
+
+搜索命令
+find    find path [-type|size|name|iname....]  "keywords"
+grep		grep "keyswords" file
+which		命令的位置
+whereis  命令 + 配置文件 + 帮助文档信息
+
+
+
+压缩解压
+gzip  .gz   gzip -d   gunzip  不能压缩目录 不保留原文件   gzip 文件名
+bzip2 .bz2  									-k
+
+zip  -r      zip xxx.zip  xxx
+
+tar 打包 解包
+-c v x z j  f
+tar -cf xxx.tar 
+gzip xxx.tar
+tar -zcvf xxx.tar.gz  .tgz
+
+
+
+
+vim命令
+vim  vi 
+三种模式   vim file   命令模式   i a o  I A O   插入模式   esc   :   编辑模式 底行  命令行   Enter
+定位命令  gg  G  :set nu    :set nonu  10G  :10
+删除 复制 剪切  x nx   dd  p P   yy Y  :10,20d
+替换 r R  u ctrl + r
+
+搜索 替换
+/string  n  
+:%s/old/new/c  g
+:10,20s/old/new/g 
+\/
+
+
+
+配置ip地址

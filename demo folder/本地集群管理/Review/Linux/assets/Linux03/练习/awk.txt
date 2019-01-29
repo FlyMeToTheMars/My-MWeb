@@ -1,0 +1,63 @@
+AWK是一种优良的文本处理工具。其名称得自于它的创始人 Alfred Aho 、Peter Weinberger 和 Brian Kernighan 姓氏的首个字母，AWK 提供了极其强大的功能：可以进行样式装入、流控制、数学运算符、进程控制语句甚至于内置的变量和函数。它具备了一个完整的语言所应具有的几乎所有精美特性。实际上 AWK 的确拥有自己的语言：AWK 程序设计语言， 三位创建者已将它正式定义为“样式扫描和处理语言”。它允许您创建简短的程序，这些程序读取输入文件、为数据排序、处理数据、对输入执行计算以及生成报表，还有无数其他的功能。
+相对于grep的查找，sed的编辑，awk在其对数据分析并生成报告时，显得尤为强大。简单来说awk就是把文件逐行的读入，以空格为默认分隔符将每行切片，切开的部分再进行各种分析处理。
+
+printf '%s\n' `cat abc.txt`
+printf '%s\n' $(cat abc.txt)
+
+printf '输出类型输出格式' 输出内容
+
+输出类型：
+%s		输出字符串
+%i		输出整数
+%f		输出浮点数
+
+输出格式：
+\n		换行
+\t		制表符
+
+例子：
+printf "%-5s %-10s %-4s\n" NO Name Mark
+printf "%-5s %-10s %-4.2f\n" 01 Tom 90.3456
+printf "%-5s %-10s %-4.2f\n" 02 Jack 89.2345
+printf "%-5s %-10s %-4.2f\n" 03 Jeff 98.4323
+
+说明：
+%-5s 格式为左对齐且宽度为5的字符串代替（-表示左对齐），不使用则是又对齐。 
+%-4.2f 格式为左对齐宽度为4，保留两位小数。
+
+printf '%s %s %s\n' a b c d e f
+printf '%5s %s %s\n' a b c d e f
+printf '%-5s %s %s\n' a b c d e f
+
+-------------------------------------------------------------------------------------------------------------
+cut不够强大
+
+df -h | cut -d ' ' -f 2
+df -h | awk '{print $2}'
+
+awk命令格式
+awk 'pattern1 {action1} pattern2 {action2} ...' filename
+
+awk默认的分隔符是空格或制表符
+
+cat /etc/passwd | awk -F ':' '{print $0}'
+awk -F ':' '{print $2}' /etc/passwd
+
+awk -F ':' '1>0 {print $1} 2>1 {print $2}' /etc/passwd
+
+awk 'BEGIN {print "this file is /etc/passwd"} {print $0}'
+
+awk -F ':' 'BEGIN {print "this file is /etc/passwd"} {print $1}' /etc/passwd
+
+awk '{FS=":"} {print $1}' /etc/passwd
+awk 'BEGIN {FS=":"} {print $1}' /etc/passwd
+
+awk 'END {print "end of file"} {print $1}' /etc/passwd
+
+
+
+
+ifconfig eth0 | grep 'inet addr' | awk -F ":" '{print $2}' | awk '{print $1}'
+HOSTIP=`ifconfig eth0 | grep 'inet addr' | awk -F ':' '{print $2}' | awk '{print $1}'`
+
+ 

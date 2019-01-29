@@ -1,0 +1,27 @@
+printf '%s\n' `cat abc.txt`
+printf '%s\n' $(cat abc.txt)
+
+printf '输出类型输出格式' 输出内容
+
+输出类型：
+%s		输出字符串
+%i		输出整数
+%f		输出浮点数
+
+输出格式：
+\n		换行
+\t		制表符
+
+例子：
+printf "%-5s %-10s %-8s %-5s\n" NO Name Mark Gender
+printf "%-5s %-10s %-8.2f %-5s\n" 01 Tom 90.3456 male
+printf "%-5s %-10s %-8.2f %-5s\n" 02 Jack 89.2345 female
+printf "%-5s %-10s %-8.2f %-5s\n" 03 Jeff 98.4323 female
+
+说明：
+%-5s 格式为左对齐且宽度为5的字符串代替（-表示左对齐），不使用则是右对齐。 
+%-4.2f 格式为左对齐宽度为4，保留两位小数。
+
+printf '%s %s %s\n' a b c d e f
+printf '%5s %s %s\n' a b c d e f
+printf '%-5s %s %s\n' a b c d e f

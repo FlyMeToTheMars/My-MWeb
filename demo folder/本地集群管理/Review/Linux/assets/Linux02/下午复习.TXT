@@ -1,0 +1,26 @@
+
+网络通信
+ping
+ifconfig  ipconfig
+
+netstat 
+netstat -ntpl  | grep httpd
+
+    文件				目录
+r		可读				 ls
+w    可写				cat more mv cp
+x    可执行			cd 
+
+-rwxrwxrwx
+chmod ugoa +-= rwx
+421 
+chmod 751     rwxr-x--x
+所有者 root
+
+所有者
+chown hdfs:hdfs
+
+就近原则
+所有者 所属组   
+
+chgrp

@@ -1,0 +1,31 @@
+
+
+目录结构  /   绝对路径   /home/ch/test.log    相对路径   ./test.log   .       ../
+
+
+文件操作命令
+cd ~   
+pwd 
+ls  -a
+
+复制 删除 移动
+cp  -r  源  目的
+mv
+rm -r -f
+
+查看文件
+cat  -An
+more 分页  f/空格  翻页   Enter 下一行
+head -n 3 
+tail  -n   -f 
+
+su - 
+
+ln 
+ln -s  
+
+帮助命令
+man  外部命令   命令 /配置文件    1 命令  5：配置文件   man passwd  man 5 passwd 
+help  内部命令
+man cd  help
+--help  ls --help
